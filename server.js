@@ -57,18 +57,21 @@ app.post("/budget", (req, res) => {
             return res.status(500).json(err);
         }
 
-        if(result.affectedRows === 0){
+        if (result.affectedRows === 0) {
             const insertSQL = `
-                INSERT INTO budgets (month, amount) VALUES (?,?)
-            `;
+                INSERT INTO budgets (month, amount) VALUES (?, ?)
+            `
 
-            db.query(insertSQL, [month, amount], (err) => {
-                if(err){
-                    return res.status(500).json(err);
+            return db.query(insertSQL, [month, amount], (err) => {
+                if (err) {
+                return res.status(500).json(err)
                 }
+
+                return res.json({ month, amount })
             })
         }
-        res.json({month, amount});
+
+        return res.json({ month, amount })
     })
 })
 
@@ -116,7 +119,7 @@ app.patch("/transactions/:id", (req, res) => {
             [id],
             (err, results) => {
                 if(err){
-                    res.status(500).json(err);
+                    return res.status(500).json(err);
                 }
 
                return res.json(results[0]);
@@ -128,25 +131,43 @@ app.patch("/transactions/:id", (req, res) => {
 })
 
 app.delete("/transactions", (req, res) => {
-    const sql = `
-        DELETE FROM transactions WHERE checked = 1
-    `;
+    const { month } = req.query
 
-    db.query(sql, (err) => {
-        if(err){
-            return res.status(500).json(err);
+    if(
+        typeof month !== "string" ||
+        !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+    ) {
+        return res.status(400).json({
+            message: "月をYYYY-MM形式で指定してください"
+        })
+    }
+
+    const deleteSQL = `
+        DELETE FROM transactions
+        WHERE checked = 1 AND month = ?
+    `
+
+    db.query(deleteSQL, [month], (err) => {
+        if(err) {
+            return res.status(500).json({
+                message: "支出の削除に失敗しました"
+            })
         }
 
-        db.query(
-            "SELECT * FROM transactions",
-            (err, result) => {
-                if(err){
-                    res.status(500).json(err);
-                }
+        const selectSQL = `
+            SELECT * FROM transactions
+            WHERE month = ?
+        `
 
-                res.json(result);
+        db.query(selectSQL, [month], (err, result) => {
+            if(err) {
+                return res.status(500).json({
+                    message: "削除後の支出取得に失敗しました"
+                })
             }
-        )
+
+            return res.json(result)
+        })
     })
 })
 
